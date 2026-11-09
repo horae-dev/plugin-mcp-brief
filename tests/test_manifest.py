@@ -72,5 +72,5 @@ def test_the_permissions_are_the_least_the_plugin_needs() -> None:
 def test_the_version_is_the_same_everywhere() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text("utf-8")
     assert f'version = "{VERSION}"' in pyproject
-    assert on_disk()["version"] == VERSION == "0.1.0"
+    assert on_disk()["version"] == VERSION == "0.1.1"
     assert f"## {VERSION}" in (ROOT / "CHANGELOG.md").read_text("utf-8")

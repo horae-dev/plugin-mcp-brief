@@ -64,7 +64,7 @@ Limits are enforced by the schema. "One line" means no control (Cc), format (Cf,
 | `links[].label` | string | yes | 1-80, one line | Link text. |
 | `links[].url` | string | yes | `https://`, max 2048 | Target. |
 
-Beyond the schema, the plugin also refuses impossible dates (`2026-02-31`) and a `valid_until` that is not after `generated_at`; the pydantic model does the same.
+Beyond the schema, the plugin also refuses impossible dates (`2026-02-31`), a `valid_until` that is not after `generated_at` (the pydantic model does the same) and one more than 48 hours after it (`max_validity_hours`, configurable from 1 to 168).
 
 Omit optional fields rather than sending `null`, except `status.reason`, which may be `null` when `ok`.
 Horae also refuses a response larger than 64 KiB, before parsing it (enforced by the plugin, not the schema; the cap and the 5-minute `generated_at` tolerance below are configurable per pipeline, see the [README](../README.md#mcp-briefcollect)).
@@ -77,8 +77,8 @@ validates, routes and applies them. This is the mapping the contract is designed
 | Brief | Horae intent | Notes |
 |---|---|---|
 | `service.name`, `headline`, non-`crit` alerts, links | `note.replace_owned_block` in the morning note, block id `brief-<service.id>` | The section is rewritten on every run, so it never duplicates. A `crit` alert is listed here too, once. |
-| `alerts[]` with `severity: crit` | `notify.push` with `key` = `<service.id>:<alert.key>` | One push per key per local day, however many runs see it (core decision 57). The body is the alert title; the link is sent only if it falls under the notify entry's trusted `link_prefix`. |
-| `tasks[]` | `task.create` with `fingerprint` = `<service.id>:<task.id>` | Fingerprint, and from it the task's block id, is stable across runs and sources. At most 97 characters, inside the core's 128. |
+| `alerts[]` with `severity: crit` | `notify.push` with `key` = `<service.id>:<alert.key>` | One push per key per local day, however many runs see it (core decision 57). The title (`service.name`) and body (`alert.title`) are escaped like note text; at most 3 pushes per service per run (`max_pushes_per_service`); the link is sent only if it falls under the notify entry's trusted `link_prefix`. |
+| `tasks[]` | `task.create` with `fingerprint` = `<service.id>:<task.id>` | At most 10 per service per run (`max_tasks_per_service`). Fingerprint, and from it the task's block id, is stable across runs and sources. At most 97 characters, inside the core's 128. |
 | `tasks[].link` | `task.create` `link` | Routed only under the tasks entry's trusted `link_prefix` list (core decision 60). A task whose link is off-prefix is skipped, with a warning in the run record, not fatal. Ask the operator to list your host. |
 | `status` | the section, and whether the others are emitted | See below. |
 
@@ -89,6 +89,12 @@ Rules the plugin applies:
   refused.
 - **`degraded`.** The section shows the reason next to the headline. Alerts and tasks are still used.
 - **`error`.** The section shows the reason only. No task, no push, whatever the document holds.
+- **Bounded validity.** A `valid_until` more than 48 hours after `generated_at` (configurable) makes the document
+  invalid, not stale: the lifetime is a property of the document, so the section is the fixed "unavailable" line and
+  nothing from it is used.
+- **Caps.** Dedupe relies on the `key` and `id` values the service chooses, so the plugin adds at most 3 pushes
+  (`crit` alerts) and 10 new tasks per service per run, in document order (both configurable). The surplus is
+  dropped and only counted (`dropped_pushes`, `dropped_tasks`) in the returned data, never quoted.
 - **Uniqueness.** Two alerts with the same `key`, or two tasks with the same `id`, make the whole document
   invalid.
 - **Only `crit` pushes.** If the service also pushes on its own, the user gets two notifications. Remove that.

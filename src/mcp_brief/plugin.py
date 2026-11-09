@@ -32,12 +32,19 @@ from pydantic import ValidationError
 
 from mcp_brief import render
 from mcp_brief.config import (
+    DEFAULT_MAX_PUSHES,
     DEFAULT_MAX_RESPONSE_BYTES,
     DEFAULT_MAX_SKEW_SECONDS,
+    DEFAULT_MAX_TASKS,
+    DEFAULT_MAX_VALIDITY_HOURS,
+    MAX_PUSHES,
     MAX_RESPONSE_BYTES,
     MAX_SERVICES,
     MAX_SKEW_SECONDS,
+    MAX_TASKS,
+    MAX_VALIDITY_HOURS,
     MIN_RESPONSE_BYTES,
+    MIN_VALIDITY_HOURS,
     SERVICE_ID,
     ServiceConfig,
     parse_allowed_hosts,
@@ -48,7 +55,7 @@ from mcp_brief.fetch import BriefFailure, TransportFactory, default_transport, f
 
 NAME = "mcp-brief"
 """The plugin's name, also the namespace of its ref (`mcp-brief.collect`)."""
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 HORAE = ">=0,<0.2"
 HOMEPAGE = "https://github.com/horae-dev/plugin-mcp-brief"
 COMMAND = ["python3", "-m", "mcp_brief"]
@@ -71,6 +78,8 @@ PERMISSIONS = Permissions(
 
 REF = f"{NAME}.collect"
 _log = logging.getLogger("mcp_brief")
+_MCP_SESSION_LOGGER = "mcp.client.streamable_http"
+"""The `mcp` client logs `Received session ID: ...` at INFO from this logger."""
 
 
 class ServiceResult(TypedDict):
@@ -80,6 +89,8 @@ class ServiceResult(TypedDict):
     brief_state: str | None
     tasks: int
     pushes: int
+    dropped_tasks: int
+    dropped_pushes: int
 
 
 class _Done:
@@ -93,6 +104,8 @@ class _Done:
             "brief_state": None,
             "tasks": 0,
             "pushes": 0,
+            "dropped_tasks": 0,
+            "dropped_pushes": 0,
         }
         self.intents: list[dict[str, Any]] = []
 
@@ -116,6 +129,8 @@ def build(
     """The plugin, calling services through `transport(service)` (default: the real network),
     reading tokens from `environ` (default `os.environ`, at call time) and the time from
     `clock` (default: now, UTC)."""
+    # A session id is a credential-like value: keep it out of the logs (WARNING and up remain).
+    logging.getLogger(_MCP_SESSION_LOGGER).setLevel(logging.WARNING)
     make_transport = transport if transport is not None else default_transport
     now = clock if clock is not None else _utcnow
     plugin = Plugin(
@@ -132,6 +147,9 @@ def build(
         max_response_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
         max_skew_seconds: int = DEFAULT_MAX_SKEW_SECONDS,
         allowed_hosts: list[str] | None = None,
+        max_pushes_per_service: int = DEFAULT_MAX_PUSHES,
+        max_tasks_per_service: int = DEFAULT_MAX_TASKS,
+        max_validity_hours: int = DEFAULT_MAX_VALIDITY_HOURS,
     ) -> Output:
         """One section per service (block `brief-<id>`), `task.create` per task and
         `notify.push` per `crit` alert. A service that fails is degraded; the step never is."""
@@ -142,10 +160,25 @@ def build(
             )
         if not 0 <= max_skew_seconds <= MAX_SKEW_SECONDS:
             raise PluginError(f"config_invalid: max_skew_seconds is 0 to {MAX_SKEW_SECONDS}")
+        if not 1 <= max_pushes_per_service <= MAX_PUSHES:
+            raise PluginError(f"config_invalid: max_pushes_per_service is 1 to {MAX_PUSHES}")
+        if not 1 <= max_tasks_per_service <= MAX_TASKS:
+            raise PluginError(f"config_invalid: max_tasks_per_service is 1 to {MAX_TASKS}")
+        if not MIN_VALIDITY_HOURS <= max_validity_hours <= MAX_VALIDITY_HOURS:
+            raise PluginError(
+                "config_invalid: max_validity_hours is "
+                f"{MIN_VALIDITY_HOURS} to {MAX_VALIDITY_HOURS}"
+            )
         fallback = frozenset(HOSTS) | parse_allowed_hosts(allowed_hosts)
         raws = _raw_services(services)
         env = os.environ if environ is None else environ
-        limits = _Limits(max_response_bytes, dt.timedelta(seconds=max_skew_seconds))
+        limits = _Limits(
+            max_response_bytes,
+            dt.timedelta(seconds=max_skew_seconds),
+            max_pushes_per_service,
+            max_tasks_per_service,
+            dt.timedelta(hours=max_validity_hours),
+        )
         results: list[_Done] = [_Done(str(raw["id"])) for raw in raws]
 
         async def one(index: int, raw: dict[str, Any]) -> None:
@@ -179,6 +212,9 @@ def _utcnow() -> dt.datetime:
 class _Limits(NamedTuple):
     max_response_bytes: int
     skew: dt.timedelta
+    max_pushes: int
+    max_tasks: int
+    max_validity: dt.timedelta
 
 
 def _raw_services(value: object) -> list[dict[str, Any]]:
@@ -240,18 +276,21 @@ async def _service(
         brief = Brief.model_validate(document)
     except ValidationError:
         return done.degrade("schema_violation")
-    return _map(done, service, brief, now, limits.skew)
+    return _map(done, service, brief, now, limits)
 
 
 def _map(
-    done: _Done, service: ServiceConfig, brief: Brief, now: dt.datetime, skew: dt.timedelta
+    done: _Done, service: ServiceConfig, brief: Brief, now: dt.datetime, limits: _Limits
 ) -> _Done:
     """The intents of a valid brief (docs/brief-contract.md, "Rules the plugin applies")."""
     if len({alert.key for alert in brief.alerts}) != len(brief.alerts) or len(
         {task.id for task in brief.tasks}
     ) != len(brief.tasks):
         return done.degrade("schema_violation")
-    if dt.datetime.fromisoformat(brief.generated_at) > now + skew:
+    generated = dt.datetime.fromisoformat(brief.generated_at)
+    if dt.datetime.fromisoformat(brief.valid_until) - generated > limits.max_validity:
+        return done.degrade("schema_violation")  # claims to stay fresh for too long
+    if generated > now + limits.skew:
         return done.degrade("clock_skew")
     block = f"brief-{service.id}"
     done.row["brief_state"] = brief.status.state
@@ -262,13 +301,17 @@ def _map(
         # An `error` brief's items are ignored, whatever the document holds.
         return done.degrade("service_error", content)
     done.intents.append(intents.note_replace_owned_block(block, content))
-    for task in brief.tasks:
-        done.intents.append(_task(service, task))
-    for alert in brief.alerts:
-        if alert.severity == "crit":
-            done.intents.append(_push(service, brief, alert))
-    done.row["tasks"] = len(brief.tasks)
-    done.row["pushes"] = sum(1 for alert in brief.alerts if alert.severity == "crit")
+    # Dedupe rests on ids the service picks: cap what one service can add per run (the first
+    # ones in document order are kept) and count, never name, what was dropped.
+    tasks = brief.tasks[: limits.max_tasks]
+    crit = [alert for alert in brief.alerts if alert.severity == "crit"]
+    pushes = crit[: limits.max_pushes]
+    done.intents.extend(_task(service, task) for task in tasks)
+    done.intents.extend(_push(service, brief, alert) for alert in pushes)
+    done.row["tasks"] = len(tasks)
+    done.row["pushes"] = len(pushes)
+    done.row["dropped_tasks"] = len(brief.tasks) - len(tasks)
+    done.row["dropped_pushes"] = len(crit) - len(pushes)
     return done
 
 
@@ -284,4 +327,6 @@ def _task(service: ServiceConfig, task: Task) -> dict[str, Any]:
 def _push(service: ServiceConfig, brief: Brief, alert: Alert) -> dict[str, Any]:
     key = f"{service.id}:{alert.key}"
     link = alert.link if alert.link and render.under(alert.link, service.link_prefix) else None
-    return intents.notify_push(alert.title, title=brief.service.name, key=key, link=link)
+    return intents.notify_push(
+        render.data(alert.title), title=render.data(brief.service.name), key=key, link=link
+    )
