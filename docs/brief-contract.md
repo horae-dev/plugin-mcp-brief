@@ -37,7 +37,7 @@ must be safe to call at any time (read-only, idempotent, fast).
 
 ## Fields
 
-Limits are enforced by the schema. "One line" means no control character (so no newline or tab).
+Limits are enforced by the schema. "One line" means no control (Cc), format (Cf, which includes bidi overrides and zero-width characters) or line or paragraph separator (Zl, Zp) character, so no newline, tab, C1 control, U+202E or U+200B. URLs are `https://` with an ASCII host (punycode for international names), no user info, and printable ASCII after it (percent-encode anything else).
 
 | Field | Type | Req. | Limits | Semantics |
 |---|---|---|---|---|

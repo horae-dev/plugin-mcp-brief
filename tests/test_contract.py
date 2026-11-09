@@ -110,3 +110,59 @@ def test_the_model_also_checks_what_a_pattern_cannot(patch: dict[str, Any]) -> N
     document = {**_load(EXAMPLES / "valid" / "minimal.json"), **patch}
     with pytest.raises(ValidationError):
         Brief.model_validate(document)
+
+
+HOSTILE = {
+    "bidi-override": "safe \u202etxt.exe",
+    "zero-width-space": "pay\u200bnow",
+    "line-separator": "one\u2028two",
+    "paragraph-separator": "one\u2029two",
+    "c1-control": "one\u0085two",
+    "bom": "\ufeffhi",
+    "tag-character": "hi\U000e0041",
+}
+
+
+@pytest.mark.parametrize("text", HOSTILE.values(), ids=HOSTILE.keys())
+def test_invisible_characters_are_refused_everywhere(
+    text: str, validator: Draft202012Validator
+) -> None:
+    base = _load(EXAMPLES / "valid" / "minimal.json")
+    for document in (
+        {**base, "headline": text},
+        {**base, "service": {"id": "x", "name": text}},
+        {**base, "status": {"state": "degraded", "reason": text}},
+        {**base, "alerts": [{"key": "a", "severity": "warn", "title": text}]},
+        {**base, "tasks": [{"id": "a", "title": text}]},
+        {**base, "links": [{"label": text, "url": "https://example.test/"}]},
+    ):
+        with pytest.raises(ValidationError):
+            Brief.model_validate(document)
+        if text != HOSTILE["tag-character"]:  # beyond the BMP: the model alone catches it
+            assert not validator.is_valid(document)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.test/caf\u00e9",
+        "https://exämple.test/",
+        "https://user@example.test/",
+        "https://example.test/a\\b",
+        "https://example.test/a b",
+        "https://example.test/\u202e",
+        "https://example.test\u2028/",
+    ],
+)
+def test_urls_are_printable_ascii(url: str, validator: Draft202012Validator) -> None:
+    document = {**_load(EXAMPLES / "valid" / "minimal.json"), "links": [{"label": "l", "url": url}]}
+    assert not validator.is_valid(document)
+    with pytest.raises(ValidationError):
+        Brief.model_validate(document)
+
+
+def test_punycode_hosts_and_percent_encoded_paths_pass(validator: Draft202012Validator) -> None:
+    url = "https://xn--exmple-cua.test:8443/caf%C3%A9?q=1#top"
+    document = {**_load(EXAMPLES / "valid" / "minimal.json"), "links": [{"label": "l", "url": url}]}
+    validator.validate(document)
+    Brief.model_validate(document)

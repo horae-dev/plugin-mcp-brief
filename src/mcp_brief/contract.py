@@ -7,6 +7,7 @@ Every text field is untrusted: Horae renders it as data (see docs/brief-contract
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
@@ -17,13 +18,23 @@ SCHEMA_ID = (
     "https://raw.githubusercontent.com/horae-dev/plugin-mcp-brief/main/schemas/brief/v1.json"
 )
 
-_LINE = r"^[^\x00-\x1f\x7f]+$"  # one line, no control character
+# One line of text: no control (Cc), format (Cf, bidi and zero-width included) or line and
+# paragraph separator (Zl, Zp) character. The class lists the BMP ones; `_Strict` checks the rest.
+_LINE = (
+    r"^[^\x00-\x1f\x7f-\x9f\u00ad\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2\u180e"
+    r"\u200b-\u200f\u2028-\u202e\u2060-\u2064\u2066-\u206f\ufeff\ufff9-\ufffb]+$"
+)
 _KEY = r"^[A-Za-z0-9._:-]{1,64}$"  # same alphabet as a Horae fingerprint, shorter
 _STAMP = (
     r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
     r"(\.[0-9]{1,6})?(Z|[+-][0-9]{2}:[0-9]{2})$"
 )
-_URL = r"^https://[^\x00-\x20\x7f\\]+$"
+# https, an ASCII host (punycode for IDN), no user info, printable ASCII after it (percent-encode
+# anything else), no backslash.
+_URL = (
+    r"^https://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?"
+    r"(?:[/?#][\x21-\x5b\x5d-\x7e]*)?$"
+)
 
 Line = Annotated[str, Field(min_length=1, pattern=_LINE)]
 Key = Annotated[str, Field(pattern=_KEY)]
@@ -34,8 +45,19 @@ Stamp = Annotated[
 ]
 
 
+_REFUSED = frozenset({"Cc", "Cf", "Zl", "Zp"})
+
+
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("*")
+    @classmethod
+    def _no_invisible_characters(cls, value: object) -> object:
+        # Also covers astral format characters (tag characters, for one) that no BMP class can.
+        if isinstance(value, str) and any(unicodedata.category(c) in _REFUSED for c in value):
+            raise ValueError("control, format and separator characters are not allowed")
+        return value
 
 
 class Service(_Strict):

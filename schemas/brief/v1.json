@@ -24,7 +24,7 @@
         "title": {
           "maxLength": 120,
           "minLength": 1,
-          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]+$",
           "title": "Title",
           "type": "string"
         },
@@ -32,7 +32,7 @@
           "anyOf": [
             {
               "maxLength": 500,
-              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]+$",
               "type": "string"
             },
             {
@@ -47,7 +47,7 @@
             {
               "maxLength": 2048,
               "minLength": 9,
-              "pattern": "^https://[^\\x00-\\x20\\x7f\\\\]+$",
+              "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?(?:[/?#][\\x21-\\x5b\\x5d-\\x7e]*)?$",
               "type": "string"
             },
             {
@@ -73,14 +73,14 @@
         "label": {
           "maxLength": 80,
           "minLength": 1,
-          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]+$",
           "title": "Label",
           "type": "string"
         },
         "url": {
           "maxLength": 2048,
           "minLength": 9,
-          "pattern": "^https://[^\\x00-\\x20\\x7f\\\\]+$",
+          "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?(?:[/?#][\\x21-\\x5b\\x5d-\\x7e]*)?$",
           "title": "Url",
           "type": "string"
         }
@@ -106,7 +106,7 @@
           "description": "Section title.",
           "maxLength": 60,
           "minLength": 1,
-          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]+$",
           "title": "Name",
           "type": "string"
         }
@@ -148,7 +148,7 @@
           "anyOf": [
             {
               "maxLength": 200,
-              "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+              "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]+$",
               "type": "string"
             },
             {
@@ -189,7 +189,7 @@
         "title": {
           "maxLength": 200,
           "minLength": 1,
-          "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+          "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]+$",
           "title": "Title",
           "type": "string"
         },
@@ -213,7 +213,7 @@
             {
               "maxLength": 2048,
               "minLength": 9,
-              "pattern": "^https://[^\\x00-\\x20\\x7f\\\\]+$",
+              "pattern": "^https://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?(?:[/?#][\\x21-\\x5b\\x5d-\\x7e]*)?$",
               "type": "string"
             },
             {
@@ -269,7 +269,7 @@
       "description": "One-line summary: the morning-note section's first line.",
       "maxLength": 200,
       "minLength": 1,
-      "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+      "pattern": "^[^\\x00-\\x1f\\x7f-\\x9f\\u00ad\\u0600-\\u0605\\u061c\\u06dd\\u070f\\u0890\\u0891\\u08e2\\u180e\\u200b-\\u200f\\u2028-\\u202e\\u2060-\\u2064\\u2066-\\u206f\\ufeff\\ufff9-\\ufffb]+$",
       "title": "Headline",
       "type": "string"
     },
