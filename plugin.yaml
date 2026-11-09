@@ -1,0 +1,33 @@
+# Written by `uv run python -m mcp_brief --manifest > plugin.yaml`; tests/test_manifest.py
+# checks it is what the SDK writes. When installing, pin runtime.command to an absolute
+# interpreter that has this package (horae-sdk README, "The command"), and add the hosts of
+# your services to permissions.network (README, "Hosts").
+name: mcp-brief
+version: 0.1.0
+horae: '>=0,<0.2'
+description: 'Call a brief() tool on MCP services: morning-note sections, tasks, alerts.'
+license: Apache-2.0
+homepage: https://github.com/horae-dev/plugin-mcp-brief
+provides:
+  sources:
+  - mcp-brief.collect
+permissions:
+  optional_secrets:
+  - MCP_BRIEF_TOKEN_1
+  - MCP_BRIEF_TOKEN_2
+  - MCP_BRIEF_TOKEN_3
+  - MCP_BRIEF_TOKEN_4
+  - MCP_BRIEF_TOKEN_5
+  - MCP_BRIEF_TOKEN_6
+  - MCP_BRIEF_TOKEN_7
+  - MCP_BRIEF_TOKEN_8
+  intents:
+  - note.replace_owned_block
+  - task.create
+  - notify.push
+runtime:
+  protocol: mcp-stdio
+  command:
+  - python3
+  - -m
+  - mcp_brief

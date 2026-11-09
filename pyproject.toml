@@ -7,6 +7,9 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
+    "horae-sdk>=0.5,<0.6",
+    "httpx2>=2.16,<3",
+    "mcp>=2.3,<3",
     "pydantic>=2.9,<3",
 ]
 
@@ -20,13 +23,20 @@ packages = ["src/mcp_brief"]
 [dependency-groups]
 dev = [
     "jsonschema>=4.23",
-    "mcp>=2.3,<3",
     "mypy>=2.4",
     "pytest>=9.1",
     "pytest-cov>=7",
     "ruff>=0.17",
     "types-jsonschema>=4",
+    "types-pyyaml>=6",
 ]
+
+# horae-sdk is not on PyPI yet: it comes from the core repository's main branch. uv.lock pins
+# the exact commit (CI checks the lock, so builds are reproducible); Renovate's weekly lock
+# file maintenance moves it to the latest main, or run `uv lock --upgrade-package horae-sdk`.
+# Once horae-sdk is published, delete this table: the requirement above then resolves from PyPI.
+[tool.uv.sources]
+horae-sdk = { git = "https://github.com/horae-dev/horae", branch = "main", subdirectory = "sdk" }
 
 [tool.uv]
 required-version = ">=0.13"
