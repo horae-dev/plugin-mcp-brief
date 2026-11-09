@@ -67,7 +67,7 @@ Limits are enforced by the schema. "One line" means no control (Cc), format (Cf,
 Beyond the schema, the plugin also refuses impossible dates (`2026-02-31`) and a `valid_until` that is not after `generated_at`; the pydantic model does the same.
 
 Omit optional fields rather than sending `null`, except `status.reason`, which may be `null` when `ok`.
-Horae also refuses a response larger than 64 KiB, before parsing it (enforced by the plugin, not the schema).
+Horae also refuses a response larger than 64 KiB, before parsing it (enforced by the plugin, not the schema; the cap and the 5-minute `generated_at` tolerance below are configurable per pipeline, see the [README](../README.md#mcp-briefcollect)).
 
 ## How Horae maps a brief onto its intents
 
