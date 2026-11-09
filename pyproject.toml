@@ -1,6 +1,6 @@
 [project]
 name = "horae-plugin-mcp-brief"
-version = "0.1.0"
+version = "0.1.1"
 description = "Horae plugin: call a brief() tool on any MCP service. Holds the brief() contract."
 readme = "README.md"
 license = "Apache-2.0"

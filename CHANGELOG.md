@@ -3,6 +3,18 @@
 Every change to tools, parameters and permissions. A new permission is called out: users
 must approve it.
 
+## 0.1.1
+
+- **Hardening** (#7). New optional parameters of `mcp-brief.collect`; no new permission.
+  - A `notify.push` title (`service.name`) and body (`alert.title`) are escaped like note text.
+  - `max_pushes_per_service` (1 to 10, default 3) and `max_tasks_per_service` (1 to 10,
+    default 10) cap what one service adds per run; the first ones in document order are kept.
+    Each result row gains `dropped_pushes` and `dropped_tasks` (counts only).
+  - `max_validity_hours` (1 to 168, default 48): a `valid_until` further than this after
+    `generated_at` makes the brief invalid (`schema_violation`).
+  - The `mcp` client's `Mcp-Session-Id` log line (logger `mcp.client.streamable_http`) is lowered
+    to WARNING when the plugin starts.
+
 ## 0.1.0
 
 - **New tool `mcp-brief.collect`** (#3): calls `brief(schema_version=1)` on each configured MCP

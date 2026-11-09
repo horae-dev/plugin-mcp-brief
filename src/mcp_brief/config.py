@@ -30,6 +30,16 @@ DEFAULT_MAX_SKEW_SECONDS = 300
 """The contract's documented tolerance: a `generated_at` more than 5 minutes ahead is refused."""
 MAX_SKEW_SECONDS = 3600
 MAX_ALLOWED_HOSTS = 16
+DEFAULT_MAX_PUSHES = 3
+"""Pushes per service per run: a service picks its alert keys, so it could flood the phone."""
+MAX_PUSHES = 10
+DEFAULT_MAX_TASKS = 10
+"""New tasks per service per run: a service picks its task ids, so it could flood the vault."""
+MAX_TASKS = 10
+DEFAULT_MAX_VALIDITY_HOURS = 48
+"""Longest `valid_until - generated_at` accepted, so a brief cannot stay fresh forever."""
+MIN_VALIDITY_HOURS = 1
+MAX_VALIDITY_HOURS = 168
 
 SERVICE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
 SECRET_NAME = re.compile(r"MCP_BRIEF_[A-Z0-9_]{1,100}")

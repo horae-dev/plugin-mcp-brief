@@ -3,7 +3,7 @@
 # interpreter that has this package (horae-sdk README, "The command"), and add the hosts of
 # your services to permissions.network (README, "Hosts").
 name: mcp-brief
-version: 0.1.0
+version: 0.1.1
 horae: '>=0,<0.2'
 description: 'Call a brief() tool on MCP services: morning-note sections, tasks, alerts.'
 license: Apache-2.0

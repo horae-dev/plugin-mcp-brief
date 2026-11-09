@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import re
 from typing import Any
 
@@ -11,7 +12,7 @@ import pytest
 
 from conftest import Run, service
 from helpers import BODY_MARKER, TOKEN, Variant, example_brief, stamp
-from mcp_brief import render
+from mcp_brief import build, render
 
 FINANCE = "finance.example.test"
 HEALTH = "health.example.test"
@@ -38,6 +39,8 @@ def test_one_service_feeds_a_section_a_task_and_no_push(run: Run) -> None:
                 "brief_state": "ok",
                 "tasks": 1,
                 "pushes": 0,
+                "dropped_tasks": 0,
+                "dropped_pushes": 0,
             }
         ],
     }
@@ -593,4 +596,78 @@ def test_a_full_brief_stays_within_the_core_limits(run: Run) -> None:
     )
     served = {f"s{n}.example.test": Variant(many) for n in range(8)}
     result = run(served, [service(host) for host in served])
-    assert len(result.intents) == 8 * 21 < 256
+    assert len(result.intents) == 8 * (1 + 10 + 3) < 256
+
+
+# --- hardening (#7) ---------------------------------------------------------------------------
+
+
+def test_a_push_title_and_body_are_escaped_like_note_text(run: Run) -> None:
+    alert = {"key": "k", "severity": "crit", "title": "See [[Secret]] #tag [x](https://a.test)"}
+    brief = example_brief(service={"id": "f", "name": "Fin [[Vault]] #tag"}, alerts=[alert])
+    push = of_type(run({FINANCE: Variant(brief)}, [service(FINANCE)]), "notify.push")[0]
+    assert push["body"] == render.data(alert["title"])
+    assert push["title"] == render.data("Fin [[Vault]] #tag")
+    for text in (push["body"], push["title"]):
+        assert "[[" not in text
+        assert "](" not in text
+
+
+def test_pushes_and_tasks_are_capped_per_service_and_counted(run: Run) -> None:
+    many = example_brief(
+        alerts=[{"key": f"k{n}", "severity": "crit", "title": f"Secret {n}"} for n in range(7)],
+        tasks=[{"id": f"t{n}", "title": f"Task {n}"} for n in range(10)],
+    )
+    served = {FINANCE: Variant(many)}
+    result = run(served, [service(FINANCE)], max_tasks_per_service=4)
+    row = rows(result)["finance"]
+    assert (row["pushes"], row["dropped_pushes"]) == (3, 4)  # default: 3 pushes
+    assert (row["tasks"], row["dropped_tasks"]) == (4, 6)
+    assert [i["key"] for i in of_type(result, "notify.push")] == [f"finance:k{n}" for n in range(3)]
+    assert len(of_type(result, "task.create")) == 4
+    assert "Secret 5" not in json.dumps(result.data)  # counts only, no text
+    wide = run(served, [service(FINANCE)], max_pushes_per_service=7)
+    assert rows(wide)["finance"]["dropped_pushes"] == 0
+    assert len(of_type(wide, "notify.push")) == 7
+    assert rows(wide)["finance"]["dropped_tasks"] == 0  # default: 10 tasks
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"max_pushes_per_service": 0},
+        {"max_pushes_per_service": 11},
+        {"max_tasks_per_service": 0},
+        {"max_tasks_per_service": 11},
+        {"max_validity_hours": 0},
+        {"max_validity_hours": 169},
+    ],
+)
+def test_the_new_limits_are_bounded(run: Run, params: dict[str, int]) -> None:
+    result = run({FINANCE: Variant()}, [service(FINANCE)], **params)
+    assert result.error is not None
+    assert "config_invalid" in str(result.error)
+
+
+def test_valid_until_is_bounded_after_generated_at(run: Run) -> None:
+    def served(hours: float) -> dict[str, Variant]:
+        return {FINANCE: Variant(example_brief(valid_until=stamp(dt.timedelta(hours=hours))))}
+
+    edge = rows(run(served(48), [service(FINANCE)]))["finance"]
+    assert edge["status"] == "ok"  # exactly 48 h is allowed
+    over = run(served(48.1), [service(FINANCE)])
+    assert rows(over)["finance"]["reason"] == "schema_violation"
+    assert [i["type"] for i in over.intents] == ["note.replace_owned_block"]
+    assert "Spending" not in over.intents[0]["content"]  # nothing from the document
+    longer = run(served(100), [service(FINANCE)], max_validity_hours=168)
+    assert rows(longer)["finance"]["status"] == "ok"
+    shorter = run(served(12.5), [service(FINANCE)], max_validity_hours=12)
+    assert rows(shorter)["finance"]["reason"] == "schema_violation"
+
+
+def test_the_mcp_session_id_logger_is_lowered_to_warning() -> None:
+    logger = logging.getLogger("mcp.client.streamable_http")
+    logger.setLevel(logging.NOTSET)
+    build()
+    assert logger.level == logging.WARNING
+    assert not logger.isEnabledFor(logging.INFO)

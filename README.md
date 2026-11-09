@@ -16,8 +16,8 @@ Calls `brief(schema_version=1)` on each configured MCP service over streamable H
 | From the brief | Intent |
 |---|---|
 | name, headline, status, non-`crit` alerts, links | `note.replace_owned_block`, block `brief-<id>`: one section per service, rewritten on every run (the core fills the note `path` from the `act` entry) |
-| each task | `task.create`, fingerprint `<id>:<task id>`, `due`, and `link` if it is under a `link_prefix` |
-| each `crit` alert | `notify.push`, `key` `<id>:<alert key>`, body = the alert title, `link` if it is under a `link_prefix` |
+| each task (at most `max_tasks_per_service`) | `task.create`, fingerprint `<id>:<task id>`, `due`, and `link` if it is under a `link_prefix` |
+| each `crit` alert | `notify.push`, `key` `<id>:<alert key>`, body = the alert title (escaped), at most `max_pushes_per_service` per service, `link` if it is under a `link_prefix` |
 
 `<id>` is the `id` **you** configure, not the one in the document: a service chooses neither a block, a key nor a
 host.
@@ -36,6 +36,9 @@ host.
             url: https://health.example.org/mcp
         max_response_bytes: 65536              # optional, 1024 to 1048576, default 64 KiB
         max_skew_seconds: 300                  # optional, 0 to 3600, default 5 minutes
+        max_pushes_per_service: 3              # optional, 1 to 10, default 3
+        max_tasks_per_service: 10              # optional, 1 to 10, default 10
+        max_validity_hours: 48                 # optional, 1 to 168, default 48
         allowed_hosts: []                      # only for a core older than horae-sdk 0.5
 ```
 
@@ -49,6 +52,9 @@ host.
 | `services[].link_prefix` | none | `https` URLs ending in `/`. A task or alert link is kept only under one of them (same host, path prefix, no `..`); otherwise the item is kept without its link, and the section shows the label without a URL. List here what the `link_prefix` of your `tasks` and `notify` entries already trust, or the core would drop the link. |
 | `max_response_bytes` | `65536` | Cap on the bytes of each HTTP response, enforced while they arrive: a larger body is cut off and never parsed. A service that returns its document both as structured content and as text sends it twice. |
 | `max_skew_seconds` | `300` | A `generated_at` more than this far ahead of the clock is refused (`clock_skew`). |
+| `max_pushes_per_service` | `3` | At most this many `notify.push` per service per run (`crit` alerts, in document order). Dedupe rests on keys the service chooses, so this bounds a service that rotates them. The rest are dropped and counted in `dropped_pushes`. |
+| `max_tasks_per_service` | `10` | The same for `task.create` (task ids are chosen by the service); the surplus is counted in `dropped_tasks`. |
+| `max_validity_hours` | `48` | A `valid_until` more than this many hours after `generated_at` makes the brief invalid (`schema_violation`): a brief cannot stay fresh forever. Invalid rather than stale, as the lifetime is a property of the document (like a repeated key), not an expiry, and "expired at ..." would be false. |
 | `allowed_hosts` | none | See [Hosts](#hosts). |
 
 ### Output
@@ -56,7 +62,7 @@ host.
 ```json
 {"complete": true,
  "services": [{"id": "finance", "status": "ok", "reason": null, "brief_state": "ok",
-               "tasks": 1, "pushes": 0}]}
+               "tasks": 1, "pushes": 0, "dropped_tasks": 0, "dropped_pushes": 0}]}
 ```
 
 `status` is `ok` or `degraded`; `reason` is a fixed code (below) when degraded; `brief_state` is the `status.state`
@@ -84,7 +90,7 @@ it proposes no task and no push. The response body, headers and the token are ne
 | `protocol_error`, `request_failed` | not a valid MCP answer, a compressed body, or an unexpected error |
 | `tool_error` | the `brief` tool reported an error |
 | `invalid_json` | the tool answered text that is not JSON |
-| `schema_violation` | the document breaks the contract, or repeats an alert `key` or task `id` |
+| `schema_violation` | the document breaks the contract, repeats an alert `key` or task `id`, or has a `valid_until` more than `max_validity_hours` after `generated_at` |
 | `clock_skew` | `generated_at` is more than `max_skew_seconds` in the future |
 | `stale` | now is after `valid_until`: the section says so and shows the headline as stale; no task, no push |
 | `service_error` | the service reported `status.state: error`: the section shows its reason only; its items are ignored |
@@ -97,8 +103,8 @@ A brief with `status.state: degraded` is used (the section shows the reason, ale
 Everything in a brief is untrusted. Section text is escaped with the SDK's `escape_title` (no link, wikilink,
 embed, tag, Dataview, Templater or comment construct, no Tasks signifier, no control or bidi character), a block
 marker is defused, and each string follows a fixed label so it can never start a heading, list, quote or checkbox.
-A task title goes through `task_create`, which escapes it for Obsidian Tasks. A push body is the plain alert title:
-the core and the notifier decide how it is shown.
+A task title goes through `task_create`, which escapes it for Obsidian Tasks. A push title (the service name) and body (the alert title) are escaped the same way: the core and the notifier
+decide how they are shown.
 
 ### Hosts
 
