@@ -3,6 +3,11 @@
 Every change to tools, parameters and permissions. A new permission is called out: users
 must approve it.
 
+## 0.1.2
+
+- Install with `horae plugin add`: `horae-sdk` 0.9 from PyPI instead of the core's git main
+  branch, and no `exclude-newer` in `[tool.uv]` (horae-dev/horae#199). No new permission.
+
 ## 0.1.1
 
 - **Hardening** (#7). New optional parameters of `mcp-brief.collect`; no new permission.

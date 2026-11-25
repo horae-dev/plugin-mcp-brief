@@ -55,7 +55,7 @@ from mcp_brief.fetch import BriefFailure, TransportFactory, default_transport, f
 
 NAME = "mcp-brief"
 """The plugin's name, also the namespace of its ref (`mcp-brief.collect`)."""
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 HORAE = ">=0,<0.2"
 HOMEPAGE = "https://github.com/horae-dev/plugin-mcp-brief"
 COMMAND = ["python3", "-m", "mcp_brief"]
