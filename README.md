@@ -4,7 +4,9 @@
 
 Horae plugin: call a brief() tool on any MCP service and turn its section into tasks and alerts.
 
-> 🚧 **In progress.** The source `mcp-brief.collect` is in. Follow progress on the [Horae roadmap project](https://github.com/orgs/horae-dev/projects/1).
+**Docs:** <https://horae-dev.github.io/docs/plugins/mcp-brief/>
+
+> 🚧 **Early (0.1.2, listed in the [marketplace](https://github.com/horae-dev/marketplace)).** The source `mcp-brief.collect` is released. Follow progress on the [Horae roadmap project](https://github.com/orgs/horae-dev/projects/1).
 
 It declares every secret and intent it uses in `plugin.yaml`, and it only returns **intents**: the Horae core validates and applies them. It never writes anything, and a service never writes to Horae.
 
@@ -121,10 +123,12 @@ the same scheme, host and port; anything else is `redirect_refused`.
 
 ### Install
 
-The host starts `python3 -m mcp_brief` (`runtime.command`). Until Horae installs plugins into their own environments
-(M4), pin the command to an **absolute** interpreter that has this package, as the
-[SDK README](https://github.com/horae-dev/horae/blob/main/sdk/README.md#manifest) explains. It needs the network
-hosts of your services and the intents `note.replace_owned_block`, `task.create` and `notify.push`. Regenerate the
+```sh
+horae plugin add mcp-brief@0.1.2 --allow-host finance.example.org --allow-host health.example.org
+```
+
+`horae plugin add` shows the permissions, approves the hosts you grant and pins the commit in `horae.lock`. It needs
+the network hosts of your services and the intents `note.replace_owned_block`, `task.create` and `notify.push`. Regenerate the
 manifest with `uv run python -m mcp_brief --manifest > plugin.yaml`.
 
 The pipeline's `act` entries need a `link_prefix` for tasks and notifications if the services send links, and the
